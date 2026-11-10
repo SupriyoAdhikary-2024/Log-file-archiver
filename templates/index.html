@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log File Error Archiver</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="navbar">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        <div>
+          <h1>Log File Error Archiver</h1>
+          <p class="subtitle">Extract, inspect, and archive critical log events</p>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button id="exportCsvBtn" class="btn btn-secondary">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Export CSV
+        </button>
+      </div>
+    </header>
+
+    <!-- Notification Toast / Alert -->
+    <div id="alertContainer" class="alert-container" aria-live="polite"></div>
+
+    <!-- Main Content Area -->
+    <main class="main-container">
+      <!-- Top Grid: Upload Card & Severity Analytics Chart -->
+      <section class="dashboard-grid">
+        <!-- Upload Card -->
+        <div class="card upload-card">
+          <h2 class="card-title">Upload Log File</h2>
+          <p class="card-desc">Select or drag & drop a UTF-8 encoded <code>.log</code> or <code>.txt</code> file (max 2 MB).</p>
+          
+          <form id="uploadForm" class="upload-form">
+            <div id="dropZone" class="drop-zone">
+              <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <p class="drop-text">Drag & drop your log file here, or <span class="browse-link">browse</span></p>
+              <p id="selectedFileName" class="selected-file-name"></p>
+              <input type="file" id="fileInput" name="file" accept=".log,.txt" required class="file-input-hidden">
+            </div>
+
+            <div class="upload-actions">
+              <button type="submit" id="uploadSubmitBtn" class="btn btn-primary" disabled>
+                Upload & Process
+              </button>
+              <button type="button" id="clearFileBtn" class="btn btn-ghost" style="display: none;">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Analytics Overview & Chart -->
+        <div class="card chart-card">
+          <div class="card-header-row">
+            <h2 class="card-title">Severity Breakdown</h2>
+            <span id="totalUploadsBadge" class="badge badge-neutral">0 Uploads</span>
+          </div>
+          
+          <div class="chart-content">
+            <div class="chart-wrapper">
+              <canvas id="severityChart"></canvas>
+            </div>
+            <div class="stats-mini-grid">
+              <div class="stat-pill stat-critical" data-severity="CRITICAL">
+                <span class="stat-label">Critical</span>
+                <span id="statCountCritical" class="stat-value">0</span>
+              </div>
+              <div class="stat-pill stat-error" data-severity="ERROR">
+                <span class="stat-label">Error</span>
+                <span id="statCountError" class="stat-value">0</span>
+              </div>
+              <div class="stat-pill stat-warning" data-severity="WARNING">
+                <span class="stat-label">Warning</span>
+                <span id="statCountWarning" class="stat-value">0</span>
+              </div>
+              <div class="stat-pill stat-total">
+                <span class="stat-label">Total Errors</span>
+                <span id="statCountTotal" class="stat-value">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Archive Explorer Section -->
+      <section class="card explorer-card">
+        <div class="explorer-header">
+          <div>
+            <h2 class="card-title">Archived Records</h2>
+            <p class="card-desc">Search, filter, and inspect archived error entries.</p>
+          </div>
+          <div class="filters-bar">
+            <!-- Search Input -->
+            <div class="search-box">
+              <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="searchInput" placeholder="Search message or source..." autocomplete="off">
+            </div>
+
+            <!-- Severity Filter -->
+            <div class="select-box">
+              <select id="severityFilter">
+                <option value="">All Severities</option>
+                <option value="CRITICAL">CRITICAL</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARNING">WARNING</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 170px;">Timestamp</th>
+                <th style="width: 110px;">Severity</th>
+                <th>Message</th>
+                <th style="width: 140px;">Source File</th>
+                <th style="width: 70px;">Line #</th>
+              </tr>
+            </thead>
+            <tbody id="errorTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+
+          <!-- Empty / Loading / Error states -->
+          <div id="tableLoading" class="state-placeholder" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading archived records...</p>
+          </div>
+
+          <div id="tableEmpty" class="state-placeholder" style="display: none;">
+            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="8" y1="12" x2="16" y2="12"></line>
+            </svg>
+            <p>No error records found matching criteria.</p>
+          </div>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div class="pagination-footer">
+          <div class="pagination-info">
+            Showing <span id="pageRange">0 - 0</span> of <span id="totalRecordsCount">0</span> records
+          </div>
+          <div class="pagination-controls">
+            <button id="prevPageBtn" class="btn btn-sm btn-secondary" disabled>Previous</button>
+            <span id="pageIndicator" class="page-indicator">Page 1 of 1</span>
+            <button id="nextPageBtn" class="btn btn-sm btn-secondary" disabled>Next</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <p>Log File Error Archiver &bull; Production-ready College Capstone Project</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
